@@ -1,0 +1,132 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install --upgrade pip && python -m pip install .
+      - name: Unit tests
+        run: python -m unittest discover -s tests -t tests -v
+      - name: Licence audit
+        run: python tools/check_licenses.py
+
+  e2e:
+    name: e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: python -m pip install .
+      - name: Cache PyBundler runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pybundler
+          key: pybundler-runtimes-${{ runner.os }}-${{ hashFiles('src/pybundler/runtimes.py') }}
+      - name: Cache macOS runtimes (Library/Caches)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/pybundler
+          key: pybundler-runtimes-macos-${{ hashFiles('src/pybundler/runtimes.py') }}
+      - name: End-to-end build
+        env:
+          PYBUNDLER_E2E: "1"
+        run: python -m unittest discover -s tests -t tests -p 'test_e2e.py' -v
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - name: Check wheel contents
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          required = [
+              "pybundler/resources/launcher.c",
+              "pybundler/resources/boot.py",
+              "pybundler/hooks/tkinter.py",
+              "pybundler/cli.py",
+          ]
+          missing = [name for name in required if name not in names]
+          assert not missing, missing
+          print(f"{wheel}: {len(names)} files, resources present")
+          PY
+
+  windows:
+    name: windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: ${{ matrix.arch }}
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Install
+        env:
+          CC: cl
+        run: python -m pip install .
+      - name: Unit tests
+        run: python -m unittest discover -s tests -t tests -v
+      - name: End-to-end build
+        env:
+          PYBUNDLER_E2E: "1"
+          CC: cl
+        run: python -m unittest discover -s tests -t tests -p "test_e2e.py" -v
+
+  freebsd:
+    name: freebsd (unit + e2e, beta)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: pkg install -y python311 py311-pip
+          run: |
+            python3.11 -m pip install --upgrade pip
+            python3.11 -m pip install .
+            python3.11 -m unittest discover -s tests -t tests -v
+            PYBUNDLER_E2E=1 python3.11 -m unittest discover -s tests -t tests -p "test_e2e.py" -v
