@@ -73,6 +73,12 @@ def plan_site(
             continue
         if module.kind in ("builtin", "frozen"):
             continue
+        # Standard-library extension modules already ship with the bundled
+        # runtime (DLLs/ on Windows, lib-dynload/ elsewhere).  Copying them into
+        # site/ would shadow that copy and break its own DLL/library search path
+        # (e.g. _tkinter needs tcl86t.dll / tk86t.dll right next to it).
+        if module.kind == "extension" and module.path.parent.name in ("DLLs", "lib-dynload"):
+            continue
         if module.kind == "package" or (module.kind == "extension" and module.is_package):
             directory = module.directory
             if already_copied(directory):

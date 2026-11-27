@@ -28,7 +28,7 @@ is the minimum useful spec. Everything else has a default.
 | `entry` | string | auto-detected | Entry point, see below. |
 | `mode` | `"onedir"` \| `"onefile"` | `"onedir"` | Bundle shape. `--onefile`/`--onedir` override. |
 | `console` | bool | `true` | `false` builds a `.app` on macOS and suppresses the console window on Windows. |
-| `icon` | path | none | macOS `.icns` copied into the `.app` as `AppIcon.icns`. |
+| `icon` | path | none | macOS `.icns` copied into the `.app` as `AppIcon.icns`; on Windows a `.ico` is embedded into the launcher (a built-in default icon is used otherwise). |
 | `bundle_id` / `macos_bundle_id` | string | `org.pybundler.<name>` | `CFBundleIdentifier`. |
 | `company` | string | `""` | Reserved for metadata. |
 

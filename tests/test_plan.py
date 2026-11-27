@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import unittest
 
 from pybundler.build.plan import Payload
@@ -107,6 +109,7 @@ class RuntimeTrimTests(TempDirTestCase):
         self.assertEqual(item.symlink, "tcl9")
         self.assertIn("runtime/python/lib/tcl9/init.tcl", payload.items)
 
+    @unittest.skipIf(os.name == "nt", "Windows does not preserve POSIX mode bits")
     def test_executable_mode_is_preserved(self):
         _root, payload, _layout, _warnings = self.plan(set())
         item = payload.items["runtime/python/bin/python3.14"]

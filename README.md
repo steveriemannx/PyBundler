@@ -128,7 +128,7 @@ version = "1.2.0"
 entry = "src/myapp/__main__.py"   # or "myapp.__main__" or "myapp.cli:main"
 mode = "onedir"                   # "onedir" | "onefile"
 console = true                    # false -> .app on macOS / no console on Windows
-icon = "assets/AppIcon.icns"      # macOS .app icon (.icns)
+icon = "assets/AppIcon.icns"      # macOS .app icon (.icns) / Windows .ico
 macos_bundle_id = "org.example.myapp"
 
 [python]
@@ -255,8 +255,9 @@ bundle's manifests when given a onedir directory.
 * macOS: ad-hoc signatures only. Notarization, hardened runtime and universal
   binaries are on the roadmap; onefile executables cannot be re-signed with
   `codesign` after appending (the kernel still accepts the linker signature).
-* No UPX, no splash screens, no Windows `.ico` embedding, no Linux `.desktop`
-  generation.
+* No UPX, no splash screens, no Linux `.desktop` generation.
+* Windows launchers embed `icon` when it is a `.ico` file and fall back to a built-in
+  default icon otherwise.
 * `--strip-sources` keeps stdlib sources (for tracebacks) and the entry script.
 * Experiments with bytecode-level dead code analysis are intentionally avoided;
   dynamic imports need `hidden_imports` or a hook.
@@ -268,9 +269,9 @@ imports, notarization helper, zipapp-style *onefile without extraction*.
 
 ```bash
 make test          # unit tests (no network, no compiler needed)
-make e2e           # full builds of examples/hello (needs network or cached runtime)
+make e2e           # full builds of tests/fixtures/hello-console (needs network or a cached runtime)
 make lint          # compileall + zero-dependency check
-make example       # build and run examples/hello
+make example       # build the GUI example (examples/hello)
 
 # FreeBSD:
 pkg install python311 py311-pip
@@ -294,7 +295,8 @@ src/pybundler/          bundler package (stdlib only)
   build/                payload plan, onefile container, launcher, .app, build
   resources/            launcher.c and bootstrap boot.py
   hooks/                built-in hooks (tkinter, matplotlib)
-examples/hello/         complete example used by the e2e tests
+examples/hello/         GUI (Tkinter) example
+  tests/fixtures/hello-console/  console fixture used by the e2e tests
 docs/                   architecture, spec, hooks, licensing, comparison
 tests/                  unittest suite
 ```

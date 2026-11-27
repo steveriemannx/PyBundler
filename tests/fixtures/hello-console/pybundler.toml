@@ -1,0 +1,34 @@
+# Minimal console spec kept for the end-to-end tests (tests/fixtures/hello-console).
+#
+#   cd tests/fixtures/hello-console
+#   pybundler build --verify
+#   ./dist/hello --name world
+
+[app]
+name = "hello"
+version = "1.0.0"
+entry = "main.py"
+mode = "onedir"
+console = true
+
+[python]
+runtime = "auto"
+
+[build]
+output_dir = "dist"
+work_dir = "build"
+# .pyc only (much smaller). Use `pybundler build --keep-sources` while
+# debugging to keep readable tracebacks.
+strip_sources = true
+compress = true
+
+[collect]
+# "assets:assets" means: copy the project's assets/ directory to <bundle>/assets
+data = ["assets:assets"]
+hidden_imports = []
+exclude = []
+
+[launch.env]
+# Baked into pybundler.json and applied by the bootstrap unless the operator
+# already set the variable.
+PYBUNDLER_EXAMPLE = "from-spec"

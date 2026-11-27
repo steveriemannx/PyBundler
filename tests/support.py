@@ -11,7 +11,7 @@ from pybundler.runtimes import Runtime
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_ROOT = REPO_ROOT / "src"
-EXAMPLE_HELLO = REPO_ROOT / "examples" / "hello"
+EXAMPLE_HELLO = REPO_ROOT / "tests" / "fixtures" / "hello-console"
 
 
 def make_env_info(root: Path, *, version: str = "3.14.10") -> EnvInfo:

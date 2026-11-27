@@ -937,9 +937,129 @@ static void pyb_prepend_env(const char *name, const char *value) {
 
 #if defined(_WIN32)
 
+/* Spawn the interpreter and wait for it to exit.  _wspawnv concatenates its
+   arguments without quoting, which breaks as soon as the bundle lives in a path
+   containing spaces (e.g. "%LOCALAPPDATA%\Programs\My App").  Build a properly
+   quoted command line and use CreateProcessW instead. */
+static void pyb_quote_arg(wchar_t *out, size_t capacity, const wchar_t *arg) {
+    size_t used = 0;
+    size_t index = 0;
+    size_t length = wcslen(arg);
+    if (capacity < 4) {
+        if (capacity > 0) {
+            out[0] = L'\0';
+        }
+        return;
+    }
+    out[used++] = L'"';
+    for (index = 0; index < length && used + 4 < capacity; index++) {
+        size_t backslashes = 0;
+        while (index < length && arg[index] == L'\\') {
+            backslashes++;
+            index++;
+        }
+        if (index == length) {
+            while (backslashes-- > 0 && used + 2 < capacity) {
+                out[used++] = L'\\';
+            }
+            break;
+        }
+        if (arg[index] == L'"') {
+            while (backslashes-- > 0 && used + 2 < capacity) {
+                out[used++] = L'\\';
+            }
+            if (used + 3 < capacity) {
+                out[used++] = L'\\';
+                out[used++] = L'"';
+            }
+        } else {
+            while (backslashes-- > 0 && used + 2 < capacity) {
+                out[used++] = L'\\';
+            }
+            out[used++] = arg[index];
+        }
+    }
+    out[used++] = L'"';
+    out[used] = L'\0';
+}
+
+static intptr_t pyb_spawn_wait(const wchar_t *program, const wchar_t *const *argv) {
+    size_t capacity = 32768;
+    wchar_t *commandline = (wchar_t *)pyb_alloc(capacity * sizeof(wchar_t));
+    size_t used = 0;
+    int index;
+    STARTUPINFOW startup;
+    PROCESS_INFORMATION process;
+    DWORD exit_code = 0;
+    commandline[0] = L'\0';
+    for (index = 0; argv[index] != NULL; index++) {
+        wchar_t quoted[4096];
+        size_t quoted_length;
+        pyb_quote_arg(quoted, 4096, argv[index]);
+        quoted_length = wcslen(quoted);
+        if (used + quoted_length + 2 >= capacity) {
+            break;
+        }
+        if (index > 0) {
+            commandline[used++] = L' ';
+        }
+        memcpy(commandline + used, quoted, (quoted_length + 1) * sizeof(wchar_t));
+        used += quoted_length;
+    }
+    memset(&startup, 0, sizeof(startup));
+    startup.cb = sizeof(startup);
+    memset(&process, 0, sizeof(process));
+#if PYB_CONSOLE
+    DWORD creation_flags = 0;
+#else
+    /* GUI build (console = false): never open a console window for the bundled
+       console-mode interpreter. */
+    DWORD creation_flags = CREATE_NO_WINDOW;
+#endif
+    if (!CreateProcessW(program, commandline, NULL, NULL, TRUE, creation_flags, NULL, NULL,
+                        &startup, &process)) {
+        free(commandline);
+        return (intptr_t)-1;
+    }
+    free(commandline);
+    WaitForSingleObject(process.hProcess, INFINITE);
+    if (!GetExitCodeProcess(process.hProcess, &exit_code)) {
+        exit_code = 1;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return (intptr_t)exit_code;
+}
+
 int main(void) {
 #if PYB_WINDOWED
     FreeConsole();
+#endif
+#if !PYB_CONSOLE
+    /* GUI-subsystem launcher (console = false): this process has no console.
+       Give it -- and therefore the bundled python.exe, which inherits our
+       standard handles -- valid NUL handles, otherwise Python aborts with
+       "init_sys_streams: can't initialize sys standard streams" when the
+       application is started from Explorer or a shortcut. */
+    {
+        SECURITY_ATTRIBUTES sa;
+        HANDLE standard_in;
+        HANDLE standard_out;
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = NULL;
+        sa.bInheritHandle = TRUE;
+        standard_in = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                  &sa, OPEN_EXISTING, 0, NULL);
+        standard_out = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   &sa, OPEN_EXISTING, 0, NULL);
+        if (standard_in != INVALID_HANDLE_VALUE) {
+            SetStdHandle(STD_INPUT_HANDLE, standard_in);
+        }
+        if (standard_out != INVALID_HANDLE_VALUE) {
+            SetStdHandle(STD_OUTPUT_HANDLE, standard_out);
+            SetStdHandle(STD_ERROR_HANDLE, standard_out);
+        }
+    }
 #endif
     int argc = 0;
     LPWSTR *wide_argv = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -996,7 +1116,7 @@ int main(void) {
         wchar_t *wide_python_passthrough = pyb_wide(python);
         wide_argv[0] = wide_python_passthrough;
         intptr_t passthrough_status =
-            _wspawnv(_P_WAIT, wide_python_passthrough, (const wchar_t *const *)wide_argv);
+            pyb_spawn_wait(wide_python_passthrough, (const wchar_t *const *)wide_argv);
         if (passthrough_status == -1) {
             pyb_die("cannot start the bundled interpreter: %s", strerror(errno));
         }
@@ -1015,7 +1135,7 @@ int main(void) {
     }
     arguments[argc + 4] = NULL;
 
-    intptr_t status = _wspawnv(_P_WAIT, wide_python, (const wchar_t *const *)arguments);
+    intptr_t status = pyb_spawn_wait(wide_python, (const wchar_t *const *)arguments);
     if (status == -1) {
         pyb_die("cannot start the bundled interpreter: %s", strerror(errno));
     }

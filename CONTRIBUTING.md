@@ -44,7 +44,7 @@ make test e2e
 ```
 
 `make lint` runs `compileall` and the zero-dependency test. `make example`
-builds and runs `examples/hello`.
+builds the GUI example in `examples/hello`.
 
 Keep tests hermetic: use `TempDirTestCase` from `tests/support.py`, never write
 into the repository, and set `PYBUNDLER_CACHE_DIR` if a test touches the cache.

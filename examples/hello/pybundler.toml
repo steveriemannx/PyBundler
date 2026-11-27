@@ -1,15 +1,16 @@
-# Minimal PyBundler spec for the bundled example application.
+# Tkinter GUI example: opens a window, no console window on Windows.
 #
 #   cd examples/hello
-#   pybundler build --verify
-#   ./dist/hello --name world
+#   pybundler build
+#   dist/hello/hello
 
 [app]
 name = "hello"
 version = "1.0.0"
 entry = "main.py"
 mode = "onedir"
-console = true
+# No console window: on Windows the launcher is linked as a GUI application.
+console = false
 
 [python]
 runtime = "auto"
@@ -17,18 +18,13 @@ runtime = "auto"
 [build]
 output_dir = "dist"
 work_dir = "build"
-# .pyc only (much smaller). Use `pybundler build --keep-sources` while
-# debugging to keep readable tracebacks.
 strip_sources = true
 compress = true
 
 [collect]
-# "assets:assets" means: copy the project's assets/ directory to <bundle>/assets
-data = ["assets:assets"]
-hidden_imports = []
+# The tkinter hook ships Tcl/Tk; listed explicitly for clarity and safety.
+hidden_imports = ["tkinter", "_tkinter", "tkinter.ttk"]
 exclude = []
 
-[launch.env]
-# Baked into pybundler.json and applied by the bootstrap unless the operator
-# already set the variable.
-PYBUNDLER_EXAMPLE = "from-spec"
+[launch]
+args = []

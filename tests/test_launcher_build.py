@@ -53,14 +53,44 @@ class CompilerFamilyTests(unittest.TestCase):
 
 
 class CompileInvocationTests(TempDirTestCase):
+    def test_msvc_invocation_embeds_icon_resource(self):
+        output = self.tmp / "launcher.exe"
+        with mock.patch(
+            "pybundler.build.launcher._find_resource_compiler", return_value="rc"
+        ):
+            invocation = build_compile_invocation(config(), output, "cl", compress=False)
+        self.assertIsNotNone(invocation.resource_command)
+        self.assertIsNotNone(invocation.resource_script)
+        self.assertIsNotNone(invocation.resource_output)
+        self.assertIn(str(invocation.resource_output), invocation.command)
+        rc_text = invocation.resource_script.read_text("utf-8")
+        self.assertIn("IDI_APP ICON", rc_text)
+        self.assertIn("default.ico", rc_text)
+        invocation.header.unlink(missing_ok=True)
+        invocation.resource_script.unlink(missing_ok=True)
+
+    def test_msvc_windowed_launcher_uses_gui_subsystem(self):
+        output = self.tmp / "launcher.exe"
+        invocation = build_compile_invocation(
+            config(windowed=True, onefile=False), output, "cl", compress=False
+        )
+        command = invocation.command
+        self.assertIn("/SUBSYSTEM:WINDOWS", command)
+        self.assertIn("/ENTRY:mainCRTStartup", command)
+
+    def test_msvc_console_launcher_keeps_console_subsystem(self):
+        output = self.tmp / "launcher.exe"
+        invocation = build_compile_invocation(config(), output, "cl", compress=False)
+        self.assertNotIn("/SUBSYSTEM:WINDOWS", invocation.command)
+
     def test_msvc_command_uses_static_crt_and_config_header(self):
         output = self.tmp / "launcher.exe"
         invocation = build_compile_invocation(config(), output, "cl", compress=False)
         command = invocation.command
         self.assertIn("/MT", command)
-        self.assertIn("/FIpybundler_launcher_config.h", command)
-        self.assertIn("/Fopybundler_launcher.obj", command)
-        self.assertIn("/Felauncher.exe", command)
+        self.assertIn(f"/FI{invocation.header}", command)
+        self.assertIn(f"/Fo{invocation.object_file}", command)
+        self.assertIn(f"/Fe{output}", command)
         self.assertIn("shell32.lib", command)
         self.assertIn("user32.lib", command)
         self.assertIn("/link", command)

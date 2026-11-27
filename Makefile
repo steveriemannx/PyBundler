@@ -19,8 +19,8 @@ lint:
 	$(PY) tools/check_licenses.py
 
 example:
-	$(PY) -m pybundler build examples/hello/pybundler.toml --verify
-	./examples/hello/dist/hello/hello --name make
+	$(PY) -m pybundler build examples/hello/pybundler.toml
+	@echo "built examples/hello/dist/hello (GUI example, launch it manually)"
 
 build:
 	$(PY) -m pybundler build
